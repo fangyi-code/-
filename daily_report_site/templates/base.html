@@ -1,0 +1,54 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="zh-Hans" data-theme="light">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}日报{% endblock %}</title>
+  <link rel="stylesheet" href="{% static 'css/app.css' %}">
+</head>
+<body class="page tab-{{ tab|default:'today' }}">
+  <header class="topbar">
+    <div class="topbar-inner">
+      <a class="brand" href="{% url 'today' %}">Daily Brief</a>
+      <form class="search-form" id="search-form" action="{% url 'api_search' %}" method="post">
+        {% csrf_token %}
+        <input type="search" name="q" id="search-q" placeholder="AI 搜索：如「今日天气」「风险」…" autocomplete="off">
+        <button type="submit">搜索</button>
+      </form>
+      <div class="top-actions">
+        <button type="button" class="theme-toggle" id="theme-toggle" title="切换明暗">主题</button>
+        {% if user.is_authenticated %}
+          <span class="who">{{ user.username }}</span>
+          <a href="{% url 'logout' %}">退出</a>
+        {% else %}
+          <a href="{% url 'login' %}">登录</a>
+          <a href="{% url 'register' %}">注册</a>
+        {% endif %}
+      </div>
+    </div>
+    <div class="search-result" id="search-result" hidden></div>
+  </header>
+
+  <main class="main-wrap">
+    {% if messages %}
+      <ul class="messages">
+        {% for m in messages %}
+          <li class="{{ m.tags }}">{{ m }}</li>
+        {% endfor %}
+      </ul>
+    {% endif %}
+    {% block content %}{% endblock %}
+  </main>
+
+  <nav class="bottom-tabs">
+    <a href="{% url 'today' %}" class="{% if tab == 'today' %}active{% endif %}">今日</a>
+    <a href="{% url 'history' %}" class="{% if tab == 'history' %}active{% endif %}">历史</a>
+    <a href="{% url 'trends' %}" class="{% if tab == 'trends' %}active{% endif %}">趋势</a>
+    <a href="{% url 'app_settings' %}" class="{% if tab == 'settings' %}active{% endif %}">设置</a>
+  </nav>
+
+  <script src="{% static 'js/app.js' %}"></script>
+  {% block extra_js %}{% endblock %}
+</body>
+</html>

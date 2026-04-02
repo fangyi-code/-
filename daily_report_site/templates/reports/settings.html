@@ -1,0 +1,21 @@
+{% extends "base.html" %}
+{% block title %}设置{% endblock %}
+{% block content %}
+<div class="panel">
+  <h1>设置</h1>
+  <p class="hint">默认城市用于 Open-Meteo 地理编码（定时任务当前使用 <code>DEFAULT_CITY_NAME</code> 环境变量；此处保存用户偏好供后续扩展）。</p>
+  <form method="post" class="stack-form">
+    {% csrf_token %}
+    {{ form.as_p }}
+    <button type="submit">保存</button>
+  </form>
+  <h2>RSS 源（只读）</h2>
+  <ul class="feed-list">
+    {% for f in feeds %}
+      <li>{% if f.enabled %}✓{% else %}✗{% endif %} {{ f.name }} — <code>{{ f.feed_url }}</code></li>
+    {% empty %}
+      <li>无。请执行 <code>python manage.py seed_feedsources</code></li>
+    {% endfor %}
+  </ul>
+</div>
+{% endblock %}

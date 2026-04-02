@@ -1,0 +1,17 @@
+{% extends "base.html" %}
+{% block title %}历史日报{% endblock %}
+{% block content %}
+<div class="panel">
+  <h1>历史日报</h1>
+  <ul class="history-list">
+    {% for r in reports %}
+      <li>
+        <a href="{% url 'report_day' r.report_date|date:'Y-m-d' %}">{{ r.report_date }} — {{ r.title }}</a>
+        <span class="muted">风险 {{ r.risk_score }}</span>
+      </li>
+    {% empty %}
+      <li>暂无记录。</li>
+    {% endfor %}
+  </ul>
+</div>
+{% endblock %}

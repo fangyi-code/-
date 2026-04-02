@@ -1,0 +1,15 @@
+{% extends "base.html" %}
+{% block title %}尚无数据{% endblock %}
+{% block content %}
+<div class="panel empty-state">
+  <h1>欢迎使用日报系统</h1>
+  <p>{{ message }}</p>
+  <pre class="code-block">cd daily_report_site
+source .venv/bin/activate
+cp .env.example .env   # 填写 MySQL 与 ARK_* 
+python manage.py migrate
+python manage.py seed_feedsources
+python manage.py generate_daily_report
+python manage.py runserver</pre>
+</div>
+{% endblock %}

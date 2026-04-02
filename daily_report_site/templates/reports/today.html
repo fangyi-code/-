@@ -1,0 +1,126 @@
+{% extends "base.html" %}
+{% load md_tags %}
+{% block title %}{{ report.title }}{% endblock %}
+{% block content %}
+<div class="layout-feishu">
+  <aside class="toc-sidebar">
+    <div class="toc-title">目录</div>
+    <nav class="toc-nav">
+      {% for item in toc %}
+        <a href="#{{ item.slug }}">{% if item.type == 'weather' %}🌤 {% elif item.type == 'news' %}📰 {% elif item.type == 'risk' %}⚠️ {% else %}▸ {% endif %}{{ item.title }}</a>
+      {% endfor %}
+    </nav>
+  </aside>
+  <div class="main-column">
+    <header class="report-header">
+      <h1 id="top">{{ report.title }}</h1>
+      <div class="meta-row">
+        <span class="tag">报告日期：{{ report.report_date }}</span>
+        <span class="tag tag-ok">数据采集：{{ report.data_collected_at|date:"Y-m-d H:i" }}</span>
+        {% if report.raw_meta and report.raw_meta.llm %}
+          <span class="tag tag-ai">AI 已分析</span>
+        {% else %}
+          <span class="tag">离线/降级模式</span>
+        {% endif %}
+      </div>
+    </header>
+
+    <section class="ai-summary card-soft" id="ai-summary">
+      <div class="ai-summary-label">AI 速览</div>
+      <p>{{ report.ai_summary }}</p>
+    </section>
+
+    <section class="bubble-row" aria-label="概览气泡">
+      <button type="button" class="bubble bubble-news" data-modal="modal-news">
+        <span class="bubble-num">{{ news_count }}</span>
+        <span class="bubble-unit">条</span>
+        <span class="bubble-cap">今日资讯</span>
+      </button>
+      <button type="button" class="bubble bubble-risk" data-modal="modal-risk">
+        <span class="bubble-num">{{ risk_score }}</span>
+        <span class="bubble-unit">/100</span>
+        <span class="bubble-cap">风险指数</span>
+      </button>
+      <button type="button" class="bubble bubble-comments" data-modal="modal-comments">
+        <span class="bubble-num">{{ comment_count }}</span>
+        <span class="bubble-unit">条</span>
+        <span class="bubble-cap">评论</span>
+      </button>
+    </section>
+
+    {% for section in sections %}
+      <section class="report-section" id="{{ section.slug }}">
+        <h2 class="section-title">{{ section.title }}</h2>
+        <div class="section-body markdown-body">
+          {{ section.body_markdown|render_md }}
+        </div>
+      </section>
+    {% endfor %}
+
+    <section class="report-section" id="news-cards">
+      <h2 class="section-title">热点资讯卡片</h2>
+      <p class="hint">点击卡片下方展开评论（需登录）。</p>
+      <div class="news-grid">
+        {% for item in news_items %}
+          <article class="news-card" id="news-{{ item.id }}">
+            <div class="news-card-head">
+              {% if item.importance_score %}
+                <span class="pill">热度 {{ item.importance_score }}</span>
+              {% endif %}
+              <span class="source">{{ item.source_name }}</span>
+            </div>
+            <h3><a href="{{ item.url }}" target="_blank" rel="noopener">{{ item.title }}</a></h3>
+            {% if item.summary %}
+              <p class="excerpt">{{ item.summary|striptags|truncatechars:220 }}</p>
+            {% endif %}
+            <details class="comments-block">
+              <summary>展开评论（{{ item.comments_count }}）</summary>
+              {% if user.is_authenticated %}
+                <form method="post" action="{% url 'comment_add' item.id %}" class="comment-form">
+                  {% csrf_token %}
+                  <textarea name="body" rows="2" placeholder="写下看法…" required maxlength="2000"></textarea>
+                  <button type="submit">发送</button>
+                </form>
+              {% else %}
+                <p class="hint"><a href="{% url 'login' %}">登录</a> 后发表评论。</p>
+              {% endif %}
+              <ul class="comment-list">
+                {% for c in item.comments.all %}
+                  <li><strong>{{ c.user.username }}</strong> · {{ c.created_at|date:"m-d H:i" }}<br>{{ c.body }}</li>
+                {% endfor %}
+              </ul>
+            </details>
+          </article>
+        {% endfor %}
+      </div>
+    </section>
+  </div>
+</div>
+
+<div class="modal" id="modal-news" role="dialog" aria-modal="true" hidden>
+  <div class="modal-backdrop" data-close-modal></div>
+  <div class="modal-panel">
+    <button type="button" class="modal-x" data-close-modal aria-label="关闭">×</button>
+    <h3>今日资讯</h3>
+    <p>共聚合 <strong>{{ news_count }}</strong> 条 RSS 条目，已按重要度排序。完整列表见下方「热点资讯卡片」。</p>
+  </div>
+</div>
+<div class="modal" id="modal-risk" role="dialog" aria-modal="true" hidden>
+  <div class="modal-backdrop" data-close-modal></div>
+  <div class="modal-panel">
+    <button type="button" class="modal-x" data-close-modal aria-label="关闭">×</button>
+    <h3>风险评估</h3>
+    <p>模型给出的综合风险指数：<strong>{{ risk_score }}</strong> / 100。</p>
+    <div class="progress"><span style="width: {{ risk_score }}%"></span></div>
+    <p class="hint">仅供参考，请交叉验证原始报道与官方信息。</p>
+  </div>
+</div>
+<div class="modal" id="modal-comments" role="dialog" aria-modal="true" hidden>
+  <div class="modal-backdrop" data-close-modal></div>
+  <div class="modal-panel">
+    <button type="button" class="modal-x" data-close-modal aria-label="关闭">×</button>
+    <h3>评论总览</h3>
+    <p>本日所有卡片下评论合计：<strong>{{ comment_count }}</strong> 条。</p>
+  </div>
+</div>
+{% endblock %}

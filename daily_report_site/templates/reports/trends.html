@@ -1,0 +1,33 @@
+{% extends "base.html" %}
+{% block title %}趋势{% endblock %}
+{% block content %}
+<div class="panel">
+  <h1>趋势（近 30 日）</h1>
+  <h2>按日新闻条数与风险</h2>
+  <div class="table-wrap">
+    <table class="data-table">
+      <thead><tr><th>日期</th><th>新闻条数</th><th>风险分</th></tr></thead>
+      <tbody>
+        {% for row in by_day %}
+          <tr>
+            <td><a href="{% url 'report_day' row.report_date|date:'Y-m-d' %}">{{ row.report_date }}</a></td>
+            <td>{{ row.n }}</td>
+            <td>{{ row.risk_score }}</td>
+          </tr>
+        {% empty %}
+          <tr><td colspan="3">暂无数据，请先生成日报。</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  <h2>标题二字片段词频（示意）</h2>
+  <p class="hint">课堂级统计：对新闻标题去空白后取相邻二字，可作「伪主题」观察。</p>
+  <div class="chips">
+    {% for w, c in top_bigrams %}
+      <span class="chip">{{ w }} <em>{{ c }}</em></span>
+    {% empty %}
+      <span class="muted">暂无</span>
+    {% endfor %}
+  </div>
+</div>
+{% endblock %}

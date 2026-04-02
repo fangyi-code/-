@@ -1,0 +1,8 @@
+Django>=4.2,<5
+django-environ>=0.11.2
+PyMySQL>=1.1.0
+cryptography>=42.0.0
+feedparser>=6.0.11
+httpx>=0.27.0
+markdown>=3.5
+bleach>=6.1.0
