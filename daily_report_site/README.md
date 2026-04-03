@@ -6,6 +6,7 @@
 
 - **新闻**：仅通过 **RSS/Atom** 拉取各源在订阅中提供的内容，适合课堂/简历说明；未做商业站点整站 HTML 高频抓取。
 - **天气**：[Open-Meteo](https://open-meteo.com/)，**无需 API Key**。
+- **今日首页天气**：与生成日报时写入库里的「天气与环境」块可以不同——**今日**页按 **个人设置中的城市/坐标（优先）→ 公网 IP 粗定位（ip-api.com）→ `DEFAULT_CITY_NAME`** 实时拉取展示；**历史某日**页仍显示生成当日保存的天气正文。本机 `127.0.0.1` 等私网 IP 不会走 IP 定位，会落到默认城市。若部署在 Nginx 等反向代理后，需在 `.env` 设置 `TRUST_X_FORWARDED_FOR=True`，以便用 `X-Forwarded-For` 取真实客户端 IP。
 - **大模型**：火山引擎 [方舟](https://www.volcengine.com/product/ark) 豆包，一般有试用额度；请在控制台查看计费与额度。
 
 ## 环境要求

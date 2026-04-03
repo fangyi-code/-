@@ -356,6 +356,12 @@ a:hover {
   gap: 1rem;
 }
 
+.section-hint-news {
+  margin: 0 0 0.75rem;
+  color: var(--muted);
+  font-size: 0.88rem;
+}
+
 .news-card {
   border: 1px solid var(--border);
   border-radius: var(--radius);
@@ -365,6 +371,8 @@ a:hover {
 
 .news-card-head {
   display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem 0.5rem;
   justify-content: space-between;
   align-items: center;
   margin-bottom: 0.35rem;
@@ -378,6 +386,12 @@ a:hover {
   padding: 0.1rem 0.45rem;
   border-radius: 999px;
   font-weight: 600;
+}
+
+.pill-sub {
+  background: rgba(120, 120, 140, 0.15);
+  color: var(--muted);
+  font-weight: 500;
 }
 
 .news-card h3 {

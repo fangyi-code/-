@@ -7,24 +7,64 @@ import httpx
 GEO_URL = "https://geocoding-api.open-meteo.com/v1/search"
 FORECAST_URL = "https://api.open-meteo.com/v1/forecast"
 
+_GEO_COUNT = 20
 
-def geocode_city(name: str, count: int = 1) -> tuple[float, float, str] | None:
-    name = (name or "").strip()
-    if not name:
-        return None
+_FEATURE_RANK: dict[str, int] = {
+    "PPLC": 5,
+    "PPLA": 4,
+    "PPLA2": 3,
+    "PPLA3": 3,
+    "PPLA4": 3,
+}
+
+
+def _should_try_city_suffix(name: str) -> bool:
+    """Append 「市」 for ambiguous short Chinese queries (e.g. 北京 -> 北京市)."""
+    if not name or name.endswith("市"):
+        return False
+    for c in name:
+        if c.isascii() and c.isalpha():
+            return False
+    return True
+
+
+def _geo_search(name: str) -> list[dict]:
     r = httpx.get(
         GEO_URL,
-        params={"name": name, "count": count, "language": "zh"},
+        params={"name": name, "count": _GEO_COUNT, "language": "zh"},
         timeout=20.0,
     )
     r.raise_for_status()
-    data = r.json()
-    results = data.get("results") or []
+    return r.json().get("results") or []
+
+
+def _merge_queries(queries: list[str]) -> list[dict]:
+    seen: dict[int, dict] = {}
+    for q in queries:
+        for row in _geo_search(q.strip()):
+            rid = row.get("id")
+            if rid is None:
+                continue
+            if rid not in seen:
+                seen[rid] = row
+    return list(seen.values())
+
+
+def _pick_best(results: list[dict]) -> dict | None:
     if not results:
         return None
-    first = results[0]
-    lat, lon = float(first["latitude"]), float(first["longitude"])
-    label = first.get("name") or name
+
+    def feat_rank(feat: str) -> int:
+        return _FEATURE_RANK.get(feat or "", 0)
+
+    def sort_key(r: dict) -> tuple[int, int]:
+        return (feat_rank(r.get("feature_code") or ""), int(r.get("population") or 0))
+
+    return max(results, key=sort_key)
+
+
+def _result_to_label(first: dict, fallback_name: str) -> str:
+    label = first.get("name") or fallback_name
     admin = first.get("admin1")
     country = first.get("country")
     parts = [label]
@@ -32,7 +72,27 @@ def geocode_city(name: str, count: int = 1) -> tuple[float, float, str] | None:
         parts.append(admin)
     if country:
         parts.append(country)
-    return lat, lon, ", ".join(parts)
+    return ", ".join(parts)
+
+
+def geocode_city(name: str, count: int = 1) -> tuple[float, float, str] | None:
+    """Resolve city name to lat/lon + display label. Picks best match by admin capital / population."""
+    del count  # unused; kept for call-site compatibility
+    name = (name or "").strip()
+    if not name:
+        return None
+    queries = [name]
+    if _should_try_city_suffix(name):
+        queries.append(name + "市")
+    merged = _merge_queries(queries)
+    if not merged:
+        return None
+    first = _pick_best(merged)
+    if not first:
+        return None
+    lat, lon = float(first["latitude"]), float(first["longitude"])
+    label = _result_to_label(first, name)
+    return lat, lon, label
 
 
 def fetch_forecast(lat: float, lon: float) -> dict:
