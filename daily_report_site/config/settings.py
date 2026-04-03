@@ -10,6 +10,7 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 env = environ.Env(
     DEBUG=(bool, True),
     MYSQL_PORT=(int, 3306),
+    TRUST_X_FORWARDED_FOR=(bool, False),
 )
 
 environ.Env.read_env(BASE_DIR / ".env")
@@ -101,3 +102,6 @@ ARK_BASE_URL = env("ARK_BASE_URL", default="https://ark.cn-beijing.volces.com/ap
 ARK_MODEL = env("ARK_MODEL", default="")
 
 DEFAULT_CITY_NAME = env("DEFAULT_CITY_NAME", default="北京")
+
+# 反向代理后取真实客户端 IP（用于今日页 IP 天气）；仅当代理已剥离并写入 X-Forwarded-For 时开启
+TRUST_X_FORWARDED_FOR = env("TRUST_X_FORWARDED_FOR")

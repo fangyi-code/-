@@ -16,7 +16,9 @@ from django.views.decorators.http import require_POST
 
 from .forms import CardCommentForm, RegisterForm, UserProfileForm
 from .models import CardComment, DailyReport, FeedSource, NewsItem, UserProfile
-from .services import llm_client
+from .news_categories import CATEGORY_ORDER, label_for_slug
+from .services import llm_client, weather as weather_svc
+from .services.client_location import get_client_ip, ip_to_lat_lon_label
 
 
 def _ensure_profile(user):
@@ -25,6 +27,22 @@ def _ensure_profile(user):
         defaults={"city_name": settings.DEFAULT_CITY_NAME},
     )
     return profile
+
+
+def _group_news_by_category(news_list: list[NewsItem]) -> list[dict]:
+    buckets: dict[str, list[NewsItem]] = {s: [] for s in CATEGORY_ORDER}
+    for n in news_list:
+        extra = n.extra if isinstance(n.extra, dict) else {}
+        slug = extra.get("category_slug") or "other"
+        if slug not in buckets:
+            slug = "other"
+        buckets[slug].append(n)
+    out: list[dict] = []
+    for s in CATEGORY_ORDER:
+        items = buckets.get(s) or []
+        if items:
+            out.append({"slug": s, "title": label_for_slug(s), "items": items})
+    return out
 
 
 def _report_context(request, report: DailyReport):
@@ -37,24 +55,56 @@ def _report_context(request, report: DailyReport):
     comment_count = CardComment.objects.filter(news_item__report=report).count()
     news_count = report.news_items.count()
     risk = int(report.risk_score or 0)
+    news_by_category = _group_news_by_category(news)
     toc = [{"slug": s.slug, "title": s.title, "type": s.section_type} for s in sections]
-    for n in news[:12]:
+    for g in news_by_category:
         toc.append(
             {
-                "slug": f"news-{n.id}",
-                "title": n.title[:40] + ("…" if len(n.title) > 40 else ""),
-                "type": "news",
+                "slug": f"news-cat-{g['slug']}",
+                "title": g["title"],
+                "type": "news_category",
             }
         )
     return {
         "report": report,
         "sections": sections,
         "news_items": news,
+        "news_by_category": news_by_category,
         "comment_count": comment_count,
         "news_count": news_count,
         "risk_score": risk,
         "toc": toc,
+        "weather_body_override": None,
     }
+
+
+def _weather_markdown_for_request(request, user) -> str:
+    """
+    Live weather for「今日」页：资料坐标 > 资料城市 > 公网 IP > 默认城市。
+    """
+    if user.is_authenticated:
+        profile = UserProfile.objects.filter(user=user).first()
+        if profile:
+            if profile.latitude is not None and profile.longitude is not None:
+                lat, lon = float(profile.latitude), float(profile.longitude)
+                label = (profile.city_name or "").strip() or "用户位置"
+                return weather_svc.weather_markdown(lat, lon, label)
+            city = (profile.city_name or "").strip()
+            if city:
+                g = weather_svc.geocode_city(city)
+                if g:
+                    return weather_svc.weather_markdown(g[0], g[1], g[2])
+
+    ip = get_client_ip(request)
+    ip_hit = ip_to_lat_lon_label(ip)
+    if ip_hit:
+        lat, lon, label = ip_hit
+        return weather_svc.weather_markdown(lat, lon, label)
+
+    g = weather_svc.geocode_city(settings.DEFAULT_CITY_NAME)
+    if g:
+        return weather_svc.weather_markdown(g[0], g[1], g[2])
+    return weather_svc.weather_markdown(39.9, 116.4, "北京（默认）")
 
 
 def today(request):
@@ -71,6 +121,7 @@ def today(request):
     ctx = _report_context(request, report)
     ctx["tab"] = "today"
     ctx["feeds"] = FeedSource.objects.filter(enabled=True)
+    ctx["weather_body_override"] = _weather_markdown_for_request(request, request.user)
     if request.user.is_authenticated:
         ctx["profile"] = _ensure_profile(request.user)
     return render(request, "reports/today.html", ctx)
@@ -83,6 +134,7 @@ def report_day(request, day: str):
     ctx = _report_context(request, report)
     ctx["tab"] = "history"
     ctx["feeds"] = FeedSource.objects.filter(enabled=True)
+    ctx["weather_body_override"] = None
     if request.user.is_authenticated:
         ctx["profile"] = _ensure_profile(request.user)
     return render(request, "reports/today.html", ctx)

@@ -7,7 +7,7 @@
     <div class="toc-title">目录</div>
     <nav class="toc-nav">
       {% for item in toc %}
-        <a href="#{{ item.slug }}">{% if item.type == 'weather' %}🌤 {% elif item.type == 'news' %}📰 {% elif item.type == 'risk' %}⚠️ {% else %}▸ {% endif %}{{ item.title }}</a>
+        <a href="#{{ item.slug }}">{% if item.type == 'weather' %}🌤 {% elif item.title == '国内硬科技创业投资分析' %}📰 {% elif item.type == 'news_category' %}📑 {% elif item.type == 'news' %}📰 {% elif item.type == 'risk' %}⚠️ {% else %}▸ {% endif %}{{ item.title }}</a>
       {% endfor %}
     </nav>
   </aside>
@@ -52,20 +52,28 @@
       <section class="report-section" id="{{ section.slug }}">
         <h2 class="section-title">{{ section.title }}</h2>
         <div class="section-body markdown-body">
-          {{ section.body_markdown|render_md }}
+          {% if section.slug == 'weather' and weather_body_override %}
+            {{ weather_body_override|render_md }}
+          {% else %}
+            {{ section.body_markdown|render_md }}
+          {% endif %}
         </div>
       </section>
     {% endfor %}
 
-    <section class="report-section" id="news-cards">
-      <h2 class="section-title">热点资讯卡片</h2>
-      <p class="hint">点击卡片下方展开评论（需登录）。</p>
+    <p class="hint section-hint-news">点击卡片下方展开评论（需登录）。资讯已按 AI 主板块分组。</p>
+    {% for cat in news_by_category %}
+    <section class="report-section news-category-block" id="news-cat-{{ cat.slug }}">
+      <h2 class="section-title">{{ cat.title }}</h2>
       <div class="news-grid">
-        {% for item in news_items %}
+        {% for item in cat.items %}
           <article class="news-card" id="news-{{ item.id }}">
             <div class="news-card-head">
               {% if item.importance_score %}
                 <span class="pill">热度 {{ item.importance_score }}</span>
+              {% endif %}
+              {% if item.extra.secondary_tag %}
+                <span class="pill pill-sub">{{ item.extra.secondary_tag }}</span>
               {% endif %}
               <span class="source">{{ item.source_name }}</span>
             </div>
@@ -94,6 +102,7 @@
         {% endfor %}
       </div>
     </section>
+    {% endfor %}
   </div>
 </div>
 
@@ -102,7 +111,7 @@
   <div class="modal-panel">
     <button type="button" class="modal-x" data-close-modal aria-label="关闭">×</button>
     <h3>今日资讯</h3>
-    <p>共聚合 <strong>{{ news_count }}</strong> 条 RSS 条目，已按重要度排序。完整列表见下方「热点资讯卡片」。</p>
+    <p>共聚合 <strong>{{ news_count }}</strong> 条 RSS 条目，已按重要度排序；正文按板块分组展示。</p>
   </div>
 </div>
 <div class="modal" id="modal-risk" role="dialog" aria-modal="true" hidden>

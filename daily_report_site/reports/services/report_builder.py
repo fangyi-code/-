@@ -9,6 +9,12 @@ from django.db import transaction
 from django.utils import timezone
 
 from reports.models import DailyReport, NewsItem, ReportSection
+from reports.news_categories import (
+    CATEGORY_ORDER,
+    LLM_NEWS_CAP,
+    PRIMARY_SLUGS,
+    full_item_labels_for_persist,
+)
 from reports.services import llm_client
 from reports.services.rss import RawNewsItem
 from reports.services import weather as weather_svc
@@ -47,6 +53,10 @@ def _default_sections_fallback() -> list[dict[str, Any]]:
     ]
 
 
+def _slug_legend() -> str:
+    return "、".join(f"{s}={PRIMARY_SLUGS[s]}" for s in CATEGORY_ORDER)
+
+
 def build_llm_payload(
     report_date: date,
     place_label: str,
@@ -55,7 +65,8 @@ def build_llm_payload(
     history_snippet: str,
 ) -> dict[str, Any]:
     lines = []
-    for i, it in enumerate(items[:40]):
+    n_news = min(len(items), LLM_NEWS_CAP)
+    for i, it in enumerate(items[:LLM_NEWS_CAP]):
         lines.append(
             f"{i}. [{it.source_name}] {it.title}\n   摘要: {it.summary[:300]}"
         )
@@ -66,17 +77,22 @@ def build_llm_payload(
         '{"ai_summary":"string","risk_score":0-100整数,'
         '"sections":[{"slug":"英文短横线","title":"string","section_type":'
         '"analysis|risk|trend|scenario|news|other之一","order":整数,"body_markdown":"string"}],'
-        '"top_story_indices":[0,1,2] 从上面新闻列表中选最多8个下标}'
+        '"top_story_indices":[0,1,2] 从下面新闻列表中选最多8个下标,'
+        '"item_labels":[{"primary":"slug之一","secondary":"短中文或空字符串"}]。'
+        f"其中 item_labels 必须为长度 {n_news} 的数组，与新闻列表 0..{max(0, n_news - 1)} 一一对应；"
+        f" primary 只能是英文 slug：{','.join(CATEGORY_ORDER)}（含义：{_slug_legend()}）；"
+        " secondary 为可选次要标签（≤12 字为宜），无则填\"\"。"
     )
     user = (
         f"报告日期：{report_date.isoformat()}。\n"
         f"地点：{place_label}\n\n"
         f"【天气数据】\n{weather_md}\n\n"
         f"【历史线索（标题词频摘要）】\n{history_snippet}\n\n"
-        f"【今日 RSS 新闻列表】\n{news_block}\n\n"
+        f"【今日 RSS 新闻列表】（共 {n_news} 条，下标 0 起）\n{news_block}\n\n"
         "要求：sections 至少包含「分析、风险、趋势简述、情景推演」四类语义，可用 section_type 对应 analysis/risk/trend/scenario。"
         " ai_summary 为整报一句话摘要。risk_score 综合舆情与不确定性。"
-        " top_story_indices 使用上面编号。"
+        " top_story_indices 使用上面编号（须在有效下标范围内）。"
+        f" item_labels 必须恰好 {n_news} 个对象，顺序与新闻列表一致。"
     )
     raw = llm_client.chat_completion(
         [
@@ -102,6 +118,7 @@ def persist_report(
     llm_sections: list[dict[str, Any]],
     top_indices: list[int],
     raw_meta: dict,
+    per_index_labels: list[dict[str, str]],
 ) -> DailyReport:
     report, _ = DailyReport.objects.update_or_create(
         report_date=report_date,
@@ -164,6 +181,13 @@ def persist_report(
         imp = float(len(ordered_indices) - pos) / max(len(ordered_indices), 1) * 10
         if pos < len(priority):
             imp = max(imp, 6.0)
+        lab = per_index_labels[idx] if idx < len(per_index_labels) else per_index_labels[-1]
+        extra = {
+            "published": it.published,
+            "category_slug": lab["category_slug"],
+            "category_label": lab["category_label"],
+            "secondary_tag": lab["secondary_tag"],
+        }
         NewsItem.objects.create(
             report=report,
             title=it.title,
@@ -172,7 +196,7 @@ def persist_report(
             summary=it.summary[:2000],
             importance_score=round(imp, 2),
             order=pos,
-            extra={"published": it.published},
+            extra=extra,
         )
 
     return report
@@ -225,6 +249,7 @@ def run_build(
         if not isinstance(top_indices, list):
             top_indices = list(range(min(8, len(items))))
         raw_meta = {"llm": True, "news_count": len(items), "raw_response": data}
+        per_index_labels = full_item_labels_for_persist(len(items), data.get("item_labels"))
     except Exception as exc:
         llm_sections = _default_sections_fallback()
         raw_meta = {
@@ -232,6 +257,7 @@ def run_build(
             "error": str(exc)[:500],
             "news_count": len(items),
         }
+        per_index_labels = full_item_labels_for_persist(len(items), None)
 
     return persist_report(
         report_date=report_date,
@@ -243,4 +269,5 @@ def run_build(
         llm_sections=llm_sections,
         top_indices=top_indices,
         raw_meta=raw_meta,
+        per_index_labels=per_index_labels,
     )
